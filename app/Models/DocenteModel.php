@@ -12,23 +12,19 @@ class DocenteModel extends Model
     protected $allowedFields = ['clave_docente', 'nombre_completo', 'password', 'hash'];
 
     /**
-     * Verifica las credenciales del docente.
+     * Verifica clave y contraseña.
+     * El hash se guarda en `hash`; la columna `password` es varchar(12) y queda vacía.
+     *
+     * @return array<string, mixed>|false
      */
-    public function verifica(string $clave, string $password)
+    public function verifica(string $clave, string $password): array|false
     {
-        // Buscamos al docente por su clave
         $docente = $this->where('clave_docente', $clave)->first();
 
-        if (!$docente) {
-            return false; // El docente no existe
+        if (! $docente || ($docente['hash'] ?? '') === '') {
+            return false;
         }
 
-        // Verificamos la contraseña (asumiendo que usaste password_hash() al registrarlo)
-        // Si las tienes en texto plano temporalmente, cambia esto a: if ($docente['password'] === $password)
-        if (password_verify($password, $docente['password'])) {
-            return $docente;
-        }
-
-        return false;
+        return password_verify($password, $docente['hash']) ? $docente : false;
     }
 }

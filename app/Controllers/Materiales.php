@@ -143,9 +143,8 @@ class Materiales extends ResourceController
         }
 
         // Guardar la URL pública en la columna existente "imagen".
-        $urlArchivo = base_url(
-            'uploads/materiales/' . $nombreArchivo
-        );
+        $rutaArchivo = 'uploads/materiales/' . $nombreArchivo;
+        $urlArchivo  = base_url($rutaArchivo);
 
         $materialModel = model(MaterialModel::class);
 
@@ -154,7 +153,8 @@ class Materiales extends ResourceController
                 'nombre'       => $datos['nombre'],
                 'categoria_id' => (int) $datos['categoria_id'],
                 'nivel'        => (int) $datos['nivel'],
-                'imagen'       => $urlArchivo,
+                'traduccion'   => trim((string) $this->request->getPost('traduccion')),
+                'imagen'       => $rutaArchivo,
             ]);
         } catch (\Throwable $e) {
             log_message('error', 'Error al registrar material: ' . $e->getMessage());

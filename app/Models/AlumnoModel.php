@@ -19,22 +19,26 @@ class AlumnoModel extends Model
     }
 
     /**
-     * Verifica las credenciales del alumno.
+     * Verifica matrícula y contraseña.
+     * El hash de la contraseña se guarda en la columna `hash` (varchar 200).
+     * La columna `contrasena` es varchar(50) y un hash de bcrypt mide 60, por eso no se usa.
+     *
+     * @return array<string, mixed>|false
      */
-    public function verifica(string $matricula, string $password)
+    public function verifica(string $matricula, string $password): array|false
     {
-        // Buscamos al alumno por su matrícula
-        $alumno = $this->where('matricula', $matricula)->first();
-
-        if (!$alumno) {
+        if (! ctype_digit($matricula)) {
             return false;
         }
 
-        // Verificamos la contraseña (nota: tu columna se llama 'contrasena')
-        if (password_verify($password, $alumno['contrasena'])) {
-            return $alumno;
+        $alumno = $this->where('matricula', $matricula)->first();
+
+        if (! $alumno || ($alumno['hash'] ?? '') === '') {
+            return false;
         }
 
-        return false;
+        return password_verify($password, $alumno['hash']) ? $alumno : false;
     }
+    
+
 }
