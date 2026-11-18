@@ -56,8 +56,10 @@ class Alumnos extends ResourceController
             return $this->fail(implode(' ', $this->validator->getErrors()), 400);
         }
 
-        try {
-            model(AlumnoModel::class)->insert([
+                try {
+            $alumnoModel = model(AlumnoModel::class);
+
+            $alumnoModel->insert([
                 'nombre_completo' => $datos['nombre'],
                 'matricula'       => $datos['matricula'],
                 'correo'          => strtolower($datos['correo']),
@@ -65,6 +67,17 @@ class Alumnos extends ResourceController
                 'contrasena'      => '', // columna varchar(50): no cabe un hash de bcrypt (60)
                 'hash'            => password_hash($datos['contrasena'], PASSWORD_DEFAULT),
             ]);
+
+            // Todo alumno nuevo empieza en nivel A1 y con la configuración por defecto
+            $alumnoId = $alumnoModel->getInsertID();
+            $db       = db_connect();
+
+            $db->table('alumno_nivel')->insert([
+                'alumno_id' => $alumnoId,
+                'matricula' => $datos['matricula'],
+                'nivel'     => 'A1',
+            ]);
+            $db->table('configuracion_alumno')->insert(['alumno_id' => $alumnoId]);
         } catch (\Throwable $e) {
             if (stripos($e->getMessage(), 'duplicate') !== false) {
                 return $this->failResourceExists('La matrícula o el correo ya están registrados.');

@@ -11,10 +11,15 @@ class AlumnoModel extends Model
     protected $returnType    = 'array';
     protected $allowedFields = ['nombre_completo', 'matricula', 'correo', 'carrera', 'contrasena', 'hash'];
 
-    public function listaSegura(): array
+        public function listaSegura(): array
     {
-        return $this->select('id, nombre_completo, matricula, correo, carrera')
-            ->orderBy('nombre_completo', 'ASC')
+        return $this->select(
+            "alumnos.id, alumnos.nombre_completo, alumnos.matricula, alumnos.correo, "
+            . "alumnos.carrera, COALESCE(alumno_nivel.nivel, 'A1') AS nivel",
+             false
+            )
+            ->join('alumno_nivel', 'alumno_nivel.alumno_id = alumnos.id', 'left')
+            ->orderBy('alumnos.nombre_completo', 'ASC')
             ->findAll();
     }
 
