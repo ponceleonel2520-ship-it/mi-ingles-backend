@@ -6,6 +6,7 @@ use App\Models\AlumnoCategoriaModel;
 use App\Models\AlumnoModel;
 use App\Models\AlumnoNivelModel;
 use App\Models\CategoriaModel;
+use App\Models\ProgresoModel;
 use CodeIgniter\RESTful\ResourceController;
 
 class GestionAlumnos extends ResourceController
@@ -14,10 +15,6 @@ class GestionAlumnos extends ResourceController
 
     private const NIVELES = ['A1', 'A2', 'B1', 'B2', 'C1'];
 
-    /**
-     * GET /api/alumnos/{id}/categorias (solo docente)
-     * Categorías activas del nivel del alumno, indicando cuáles tiene habilitadas.
-     */
     public function categorias($alumnoId = null)
     {
         $alumnoId = (int) $alumnoId;
@@ -51,10 +48,6 @@ class GestionAlumnos extends ResourceController
         ]);
     }
 
-    /**
-     * PUT /api/alumnos/{id}/categorias (solo docente)
-     * Recibe {"categorias": [1, 2]} y deja habilitadas exactamente esas.
-     */
     public function asignarCategorias($alumnoId = null)
     {
         $alumnoId = (int) $alumnoId;
@@ -76,7 +69,6 @@ class GestionAlumnos extends ResourceController
         $ids   = array_values(array_unique(array_map('intval', $datos['categorias'])));
         $nivel = model(AlumnoNivelModel::class)->nivelDe($alumnoId);
 
-        // Solo se pueden habilitar categorías activas del nivel del alumno
         if ($ids !== []) {
             $validas = model(CategoriaModel::class)
                 ->select('id')
@@ -113,10 +105,6 @@ class GestionAlumnos extends ResourceController
         ]);
     }
 
-    /**
-     * POST /api/alumnos/{id}/promover (solo docente)
-     * Sube al alumno un nivel (A1 -> A2 -> B1 -> B2 -> C1). Nunca es automático.
-     */
     public function promover($alumnoId = null)
     {
         $alumnoId = (int) $alumnoId;
@@ -151,6 +139,126 @@ class GestionAlumnos extends ResourceController
             'status'  => 200,
             'message' => 'Alumno promovido a ' . $nuevo . '.',
             'data'    => ['nivel' => $nuevo],
+        ]);
+    }
+
+    /**
+     * GET /api/alumnos/{id}/progreso (solo docente)
+     * Devuelve el resumen por categoría + el historial cronológico de tests con fecha y hora.
+     */
+    public function progreso($alumnoId = null)
+    {
+        $alumnoId = (int) $alumnoId;
+
+        if (! model(AlumnoModel::class)->find($alumnoId)) {
+            return $this->failNotFound('El alumno no existe.');
+        }
+
+        $nivel       = model(AlumnoNivelModel::class)->nivelDe($alumnoId);
+        $habilitadas = model(AlumnoCategoriaModel::class)->habilitadasDe($alumnoId);
+        $progresos   = model(ProgresoModel::class)->deAlumno($alumnoId);
+
+        $mapaProgreso = [];
+        foreach ($progresos as $p) {
+            $mapaProgreso[(int) $p['categoria_id']] = $p;
+        }
+
+        $categorias = model(CategoriaModel::class)
+            ->select('id, nombre, nivel, orden')
+            ->where('estado', 1)
+            ->where('nivel', $nivel)
+            ->orderBy('orden', 'ASC')
+            ->orderBy('id', 'ASC')
+            ->findAll();
+
+        foreach ($categorias as &$c) {
+            $catId = (int) $c['id'];
+            $c['id']         = $catId;
+            $c['orden']      = (int) $c['orden'];
+            $c['habilitada'] = in_array($catId, $habilitadas, true);
+
+            if (isset($mapaProgreso[$catId])) {
+                $aprobado = (int) $mapaProgreso[$catId]['test_aprobado'] === 1;
+                $c['calificacion_test']    = $mapaProgreso[$catId]['calificacion_test'];
+                $c['calificacion_cerrada'] = $mapaProgreso[$catId]['calificacion_cerrada'];
+                $c['test_aprobado']        = $aprobado ? 1 : 0;
+                $c['estado_test']          = $mapaProgreso[$catId]['calificacion_test'] !== null
+                    ? ($aprobado ? 'Aprobada' : 'Reprobada')
+                    : 'Sin presentar';
+            } else {
+                $c['calificacion_test']    = null;
+                $c['calificacion_cerrada'] = null;
+                $c['test_aprobado']        = 0;
+                $c['estado_test']          = 'Sin presentar';
+            }
+        }
+        unset($c);
+
+        // Historial cronológico de intentos con fecha, hora y categoría
+        $db = db_connect();
+        $historial = $db->table('calificaciones cal')
+            ->select('cal.id, cal.nivel, cal.puntuacion, cal.tipo_prueba, cal.created_at, cat.nombre AS categoria_nombre')
+            ->join('categorias cat', 'cat.id = cal.categoria_id', 'left')
+            ->where('cal.alumno_id', $alumnoId)
+            ->orderBy('cal.created_at', 'DESC')
+            ->get()
+            ->getResultArray();
+
+        return $this->respond([
+            'status'    => 200,
+            'nivel'     => $nivel,
+            'data'      => $categorias,
+            'historial' => $historial,
+        ]);
+    }
+
+    /**
+     * PUT /api/alumnos/{id}/calificacion-final (solo docente)
+     * Recibe {"calificaciones": [{"categoria_id": 1, "calificacion": 8.5}, ...]}
+     * y guarda la calificación cerrada por categoría.
+     */
+    public function asignarCalificacionFinal($alumnoId = null)
+    {
+        $alumnoId = (int) $alumnoId;
+
+        if (! model(AlumnoModel::class)->find($alumnoId)) {
+            return $this->failNotFound('El alumno no existe.');
+        }
+
+        try {
+            $datos = $this->request->getJSON(true);
+        } catch (\Throwable $e) {
+            $datos = null;
+        }
+
+        if (! is_array($datos) || ! isset($datos['calificaciones']) || ! is_array($datos['calificaciones'])) {
+            return $this->fail('Envía la lista de calificaciones por categoría.', 400);
+        }
+
+        $progresoModel = model(ProgresoModel::class);
+
+        foreach ($datos['calificaciones'] as $item) {
+            $catId = (int) ($item['categoria_id'] ?? 0);
+            if ($catId <= 0) {
+                continue;
+            }
+
+            $valor = $item['calificacion'] ?? null;
+            if ($valor === '' || $valor === null) {
+                $progresoModel->guardarCalificacionCerrada($alumnoId, $catId, null);
+                continue;
+            }
+
+            if (! is_numeric($valor) || (float) $valor < 0 || (float) $valor > 10) {
+                return $this->fail('Cada calificación cerrada debe estar entre 0 y 10.', 400);
+            }
+
+            $progresoModel->guardarCalificacionCerrada($alumnoId, $catId, round((float) $valor, 1));
+        }
+
+        return $this->respond([
+            'status'  => 200,
+            'message' => 'Calificaciones por categoría guardadas.',
         ]);
     }
 }

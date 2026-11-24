@@ -34,6 +34,8 @@ $routes->post('api/categorias', 'Categorias::create', ['filter' => 'jwt:docente'
 $routes->put('api/alumnos/(:num)/categorias', 'GestionAlumnos::asignarCategorias/$1', ['filter' => 'jwt:docente']);
 $routes->post('api/alumnos/(:num)/promover', 'GestionAlumnos::promover/$1', ['filter' => 'jwt:docente']);
 $routes->get('api/calificaciones', 'Calificaciones::index', ['filter' => 'jwt']);
+$routes->get('api/alumnos/(:num)/progreso', 'GestionAlumnos::progreso/$1', ['filter' => 'jwt:docente']);
+$routes->put('api/alumnos/(:num)/calificacion-final', 'GestionAlumnos::asignarCalificacionFinal/$1', ['filter' => 'jwt:docente']);
 
 
 // todavía no existen en el repo; actívalas cuando los crees.

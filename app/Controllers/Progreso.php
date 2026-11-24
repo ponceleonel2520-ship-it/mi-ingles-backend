@@ -77,10 +77,11 @@ class Progreso extends ResourceController
         model(ProgresoModel::class)->registrar($alumnoId, $categoriaId, $aprobado, $calificacion);
 
         model(CalificacionModel::class)->insert([
-            'alumno_id'   => $alumnoId,
-            'nivel'       => $nivel,
-            'puntuacion'  => $calificacion,
-            'tipo_prueba' => 'test',
+            'alumno_id'    => $alumnoId,
+            'categoria_id' => $categoriaId,
+            'nivel'        => $nivel,
+            'puntuacion'   => $calificacion,
+            'tipo_prueba'  => 'test',
         ]);
 
         return $this->respondCreated([

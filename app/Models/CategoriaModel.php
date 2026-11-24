@@ -13,10 +13,7 @@ class CategoriaModel extends Model
     protected $useTimestamps = true;
 
     /**
-     * Categorías ordenadas con su estado de bloqueo.
-     * - Alumno: solo las activas de su nivel. Quedan bloqueadas hasta que el
-     *   docente se las habilite.
-     * - Docente ($alumnoId = null): todas, sin bloqueo.
+     * Categorías ordenadas con su estado de bloqueo y calificación cerrada por categoría.
      */
     public function conBloqueo(?int $alumnoId): array
     {
@@ -26,6 +23,7 @@ class CategoriaModel extends Model
 
         $habilitadas = [];
         $aprobadas   = [];
+        $cerradas    = [];
 
         if ($alumnoId !== null) {
             $nivel = model(AlumnoNivelModel::class)->nivelDe($alumnoId);
@@ -33,20 +31,24 @@ class CategoriaModel extends Model
             $this->where('estado', 1)->where('nivel', $nivel);
 
             $habilitadas = model(AlumnoCategoriaModel::class)->habilitadasDe($alumnoId);
-            $aprobadas   = model(ProgresoModel::class)->aprobadasDe($alumnoId);
+            $progreso    = model(ProgresoModel::class);
+            $aprobadas   = $progreso->aprobadasDe($alumnoId);
+            $cerradas    = $progreso->calificacionesCerradasDe($alumnoId);
         }
 
         $categorias = $this->findAll();
 
         foreach ($categorias as &$c) {
-            $c['id']               = (int) $c['id'];
-            $c['grado_dificultad'] = (int) $c['grado_dificultad'];
-            $c['orden']            = (int) $c['orden'];
-            $c['estado']           = (int) $c['estado'];
-            $c['aprobada']         = in_array($c['id'], $aprobadas, true);
+            $id = (int) $c['id'];
+            $c['id']                   = $id;
+            $c['grado_dificultad']     = (int) $c['grado_dificultad'];
+            $c['orden']                = (int) $c['orden'];
+            $c['estado']               = (int) $c['estado'];
+            $c['aprobada']             = in_array($id, $aprobadas, true);
+            $c['calificacion_cerrada'] = $cerradas[$id] ?? null;
 
             $c['bloqueada_por_defecto'] = $alumnoId !== null
-                && ! in_array($c['id'], $habilitadas, true);
+                && ! in_array($id, $habilitadas, true);
         }
         unset($c);
 
